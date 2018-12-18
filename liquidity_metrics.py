@@ -37,6 +37,53 @@ def mean_baspread_basispoint(depth_dat, currency='USD'):
     midquote = (depth_dat['ask1_price'] + depth_dat['bid1_price'])/2.
     return ((depth_dat['ask1_price'] - depth_dat['bid1_price']) / midquote).mean()*1e4
 
+def market_depth(depth_dat, currency='USD'):
+    bid_depth =  (depth_dat.loc[:,['bid{}_price'.format(l) for l in range(1,21)]] *\
+                depth_dat.loc[:,['bid{}_size'.format(l) for l in range(1,21)]].values).cumsum(axis=1).mean()
+    bid_depth.rename(lambda col: 'cum_depth' + col[3:-6], inplace=True)
+    ask_depth =  (depth_dat.loc[:,['ask{}_price'.format(l) for l in range(1,21)]] *\
+                depth_dat.loc[:,['ask{}_size'.format(l) for l in range(1,21)]].values).cumsum(axis=1).mean()
+    ask_depth.rename(lambda col: 'cum_depth' + col[3:-6], inplace=True)
+    return pd.DataFrame({'bid': bid_depth, 'ask': ask_depth})
+
+def plot_market_depth(bid_depth, ask_depth):
+    f, (ax1, ax2) = plt.subplots(2, 1, sharex=True)
+    ask_depth.plot(legend=False, ax=ax1)
+    ax1.set_title('ask', loc='left')
+    ax2.invert_yaxis()
+    bid_depth.plot(legend=False, ax=ax2)
+    ax2.set_title('bid', loc='left')
+    ylim = ax1.get_ylim()
+    ax2.set_ylim(ylim[1],ylim[0])
+    f.suptitle('market depth')
+
+def price_change_percent(depth_dat, currency='USD'):
+    bid_prcpct = depth_dat.loc[:,['bid{}_price'.format(l) for l in range(1,21)]]\
+                .apply(lambda col: col / depth_dat.loc[:,'bid1_price'].values-1).mean()
+    bid_prcpct.rename(lambda col: 'prcpct' + col[3:-6], inplace=True)
+    ask_prcpct = depth_dat.loc[:,['ask{}_price'.format(l) for l in range(1,21)]]\
+                .apply(lambda col: col / depth_dat.loc[:,'ask1_price'].values-1).mean()
+    ask_prcpct.rename(lambda col: 'prcpct' + col[3:-6], inplace=True)
+    return pd.DataFrame({'bid': bid_prcpct, 'ask': ask_prcpct})
+
+def plot_prcpct(bid_prcpct, ask_prcpct):
+    f, (ax1, ax2) = plt.subplots(2, 1, sharex=True)
+    ask_prcpct.plot(legend=False, ax=ax1)
+    ax1.set_title('ask', loc='left')
+    ax1.set_yticklabels(['{:,.2%}'.format(x) for x in ax1.get_yticks()])
+    bid_prcpct.plot(legend=False, ax=ax2)
+    ax2.set_title('bid', loc='left')
+    ylim = ax1.get_ylim()
+    ax2.set_yticklabels(['{:,.2%}'.format(x) for x in ax2.get_yticks()])
+    #ax2.set_ylim(-ylim[1],-ylim[0])
+    f.suptitle('price change percent')
+
+
+def merge_trade_quote(trade_dat, quote_dat):
+    dat = trade_dat.set_index('time_exchange')[['price', 'size','taker_side']]\
+            .join(quote_dat.set_index('time_exchange')[['ask_price', 'ask_size', 'bid_price', 'bid_size']]\
+            ,how='outer')
+
 def merge_trade_depth(trade_dat, depth_dat):
     dat = trade.set_index('time_exchange')[['price','size']]\
             .join(depth.set_index('time_exchange')[['bid1_price','ask1_price']],how='outer')
@@ -69,6 +116,12 @@ def main():
     hourly_basbp = depth.groupby(depth['time_exchange'].dt.hour).apply(mean_baspread_basispoint)
     plt.plot(hourly_basbp, marker='*')
     
+    hourly_depth = depth.groupby(depth['time_exchange'].dt.hour).apply(market_depth).unstack()
+    plot_market_depth(hourly_depth.loc[:,'bid'],hourly_depth.loc[:,'ask'])
+
+    hourly_prcpct = depth.groupby(depth['time_exchange'].dt.hour).apply(price_change_percent).unstack()
+    plot_prcpct(hourly_prcpct.loc[:,'bid'],hourly_prcpct.loc[:,'ask'])
+
     dat = merge_trade_depth(trade,depth)
     dat.groupby(dat.index.hour)\
             .apply(lambda x: pd.Series(volume_weighted_ave_baspread(x))).plot(marker='*')

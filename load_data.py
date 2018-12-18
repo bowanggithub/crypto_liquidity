@@ -58,6 +58,13 @@ def load_trade(the_date, the_exchange='BINANCE', the_crypto='BTC', the_currency=
     dat['taker_side'] = dat['taker_side'].astype('category')
     return dat
 
+def combine_trade_quote(*args, **kwargs):
+    quote = load_quote(*args, **kwargs)
+    trade = load_trade(*args, **kwargs)
+    ret = trade.set_index('time_exchange').join(quote.set_index('time_exchange')\
+                [['ask_price', 'ask_size','bid_price','bid_size']], how='outer').reset_index()
+    return ret
+
 def main():
     quote = load_quote(20180101)
     depth = load_depth(20180101)
