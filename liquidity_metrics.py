@@ -66,6 +66,25 @@ def price_change_percent(depth_dat, currency='USD'):
     ask_prcpct.rename(lambda col: 'prcpct' + col[3:-6], inplace=True)
     return pd.DataFrame({'bid': bid_prcpct, 'ask': ask_prcpct})
 
+def shape_of_order_book(depth_dat, currency='USD'):
+    midquote = (depth_dat['ask1_price'] + depth_dat['bid1_price'])/2.
+    bid_side = depth_dat.loc[:,['bid{}_price'.format(l) for l in range(1,21)]]\
+                .apply(lambda col: col / midquote.values-1).mean() * 100
+    ask_side = depth_dat.loc[:,['ask{}_price'.format(l) for l in range(1,21)]]\
+                .apply(lambda col: col / midquote.values-1).mean() * 100
+    ret = pd.DataFrame(np.nan, \
+            index=['bid{}'.format(l) for l in range(20,0,-1)]+['ask{}'.format(l) for l in range(1,21)],\
+            columns=['price_change_from_mq', 'cum_shares', 'cum_dollar'])
+    ret.loc[['bid{}'.format(l) for l in range(1,21)],'price_change_from_mq'] = bid_side.values
+    ret.loc[['ask{}'.format(l) for l in range(1,21)],'price_change_from_mq'] = ask_side.values
+    ret.loc[['bid{}'.format(l) for l in range(1,21)],'cum_shares'] =\
+            -depth_dat.loc[:,['bid{}_size'.format(l) for l in range(1,21)]].cumsum(axis=1).mean().values
+    ret.loc[['ask{}'.format(l) for l in range(1,21)],'cum_shares'] =\
+            depth_dat.loc[:,['ask{}_size'.format(l) for l in range(1,21)]].cumsum(axis=1).mean().values
+    ret.loc[:,'cum_dollar'] = ret.loc[:,'cum_shares'] * midquote.mean()
+    return ret
+
+
 def plot_prcpct(bid_prcpct, ask_prcpct):
     f, (ax1, ax2) = plt.subplots(2, 1, sharex=True)
     ask_prcpct.plot(legend=False, ax=ax1)
