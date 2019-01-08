@@ -121,6 +121,19 @@ def volume_weighted_ave_baspread(dat, currency='USD'):
     }
     return ret
 
+def kyle_lambda(trade, freq='T'):
+    trade['dollar_volume'] = trade['price'] * trade['size']
+    tmp = trade.set_index('time_exchange').resample(freq).agg({'price':'first','dollar_volume':'sum'})
+    del trade['dollar_volume']
+    tmp['price_delta'] = tmp['price'].diff()
+    tmp['price_pct_change'] = tmp['price_delta'] / tmp['price']
+    tmp.dropna(inplace=True)
+    from scipy import stats
+    import seaborn as sns
+    sns.regplot(tmp['dollar_volume'], tmp['price_pct_change'].abs())
+    return stats.linregress(tmp['dollar_volume'], tmp['price_pct_change'].abs())
+
+
 def main():
     quote = load_quote(20180101)
     depth = load_depth(20180101)
